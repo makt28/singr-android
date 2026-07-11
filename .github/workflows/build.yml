@@ -11,7 +11,7 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CORE_REPO: makt28/SingR
@@ -20,9 +20,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Hoisted to job level so the signing step's `if:` can see it.
-      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,23 +67,7 @@ jobs:
           # Pin Gradle: the runner's system gradle is 9.x, which AGP 8.7 rejects.
           gradle-version: "8.11.1"
 
-      - name: Optional release signing
-        if: ${{ env.KEYSTORE_B64 != '' }}
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          echo "$KEYSTORE_B64" | base64 -d > release.keystore
-          cat > keystore.properties <<EOF
-          storeFile=$(pwd)/release.keystore
-          storePassword=$KEYSTORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
-
-      - name: Build
+      - name: Build (unsigned)
         run: gradle --no-daemon assembleRelease
 
       - name: Upload APK artifact
@@ -95,3 +76,18 @@ jobs:
           name: singr-node-apk-${{ steps.ver.outputs.tag }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Publish APK to a release (direct download link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk="$(ls app/build/outputs/apk/release/*.apk | head -n1)"
+          # Release tag follows the bundled SingR tag (e.g. v0.5.3).
+          reltag="${{ steps.ver.outputs.tag }}"
+          gh release view "$reltag" >/dev/null 2>&1 || \
+            gh release create "$reltag" \
+              --title "SingR Node $reltag" \
+              --notes "Unsigned APK bundling SingR core $reltag. Enable 'unknown sources' to install."
+          gh release upload "$reltag" "$apk" --clobber
+          echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$reltag"

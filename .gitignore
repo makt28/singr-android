@@ -11,3 +11,5 @@ app/src/main/jniLibs/**/libsingr.so
 *.keystore
 *.jks
 keystore.properties
+# Local agent/dev notes
+CLAUDE.md
