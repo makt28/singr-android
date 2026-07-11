@@ -118,6 +118,10 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
                     basePath = Config.workDir(ctx).absolutePath
                     workingPath = Config.workDir(ctx).absolutePath
                     tempPath = ctx.cacheDir.absolutePath
+                    // Required on Android: mitigates a Go runtime stack crash
+                    // (golang/go#68760). Without it, the box crashes the process
+                    // natively the moment it starts. SFA sets this too.
+                    fixAndroidStack = true
                 },
             )
             runCatching {
