@@ -7,6 +7,7 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.singr.node.R
 
 /**
  * Keep-alive anchor, NOT a traffic tunnel.
@@ -77,7 +78,7 @@ class SingrVpnService : VpnService() {
         return NotificationCompat.Builder(this, Config.NOTIF_CHANNEL)
             .setContentTitle("SingR node running")
             .setContentText("Keep-alive tunnel active")
-            .setSmallIcon(android.R.drawable.stat_sys_vpn_ic)
+            .setSmallIcon(R.drawable.ic_stat_node)
             .setOngoing(true)
             .setContentIntent(open)
             .build()
