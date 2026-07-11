@@ -16,6 +16,27 @@ object Config {
     fun coreBinary(ctx: Context): File =
         File(ctx.applicationInfo.nativeLibraryDir, "libsingr.so")
 
+    /**
+     * proot + its loader, used only as a DNS shim: the core is a standalone
+     * CGO-disabled Go binary whose resolver needs /etc/resolv.conf, absent on
+     * Android. proot binds [resolvConf] onto /etc/resolv.conf. Both must sit in
+     * nativeLibraryDir (packaged as lib*.so) to be exec-able under Android W^X;
+     * PROOT_LOADER points the proot binary at the loader here. Optional — if the
+     * files are missing, NativeRunner execs the core directly.
+     */
+    fun prootBinary(ctx: Context): File =
+        File(ctx.applicationInfo.nativeLibraryDir, "libproot.so")
+
+    fun prootLoader(ctx: Context): File =
+        File(ctx.applicationInfo.nativeLibraryDir, "libproot-loader.so")
+
+    /** resolv.conf fed to the core via proot; regenerated on each launch. */
+    fun resolvConf(ctx: Context): File = File(workDir(ctx), "resolv.conf")
+
+    fun writeResolvConf(ctx: Context) {
+        resolvConf(ctx).writeText("nameserver 8.8.8.8\nnameserver 2001:4860:4860::8888\n")
+    }
+
     /** Working directory the core runs in; holds server.json / panel.json. */
     fun workDir(ctx: Context): File = ctx.filesDir
 

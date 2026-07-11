@@ -3,6 +3,7 @@ package com.singr.node
 import android.content.Context
 import android.util.Log
 import java.io.BufferedReader
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -45,16 +46,17 @@ class NativeRunner(private val ctx: Context) {
 
             val started = System.currentTimeMillis()
             try {
-                val p = ProcessBuilder(
-                    bin.absolutePath,
-                    "-D", Config.workDir(ctx).absolutePath,
-                    "run",
-                    "-c", Config.serverConfig(ctx).name,
-                    "-p", Config.panelConfig(ctx).name,
-                ).apply {
+                val pb = ProcessBuilder(buildCommand(bin)).apply {
                     directory(Config.workDir(ctx))
                     redirectErrorStream(true)
-                }.start()
+                    if (useProot()) environment().apply {
+                        // Point proot at its loader (both in nativeLibraryDir) and
+                        // give it a writable tmp dir; /tmp doesn't exist on Android.
+                        put("PROOT_LOADER", Config.prootLoader(ctx).absolutePath)
+                        put("PROOT_TMP_DIR", Config.workDir(ctx).absolutePath)
+                    }
+                }
+                val p = pb.start()
 
                 synchronized(this) { process = p }
                 NodeLog.append("core started")
@@ -81,6 +83,42 @@ class NativeRunner(private val ctx: Context) {
         }
         Log.i(Config.TAG, "watchdog loop ended")
         NodeLog.setState(NodeLog.State.STOPPED)
+    }
+
+    /** proot is a bundled DNS shim; if it's absent we exec the core directly. */
+    private fun useProot(): Boolean = Config.prootBinary(ctx).exists()
+
+    private fun coreArgs(bin: File): List<String> = listOf(
+        bin.absolutePath,
+        "-D", Config.workDir(ctx).absolutePath,
+        "run",
+        "-c", Config.serverConfig(ctx).name,
+        "-p", Config.panelConfig(ctx).name,
+    )
+
+    /**
+     * Wrap the core in proot only to bind a real resolv.conf onto
+     * /etc/resolv.conf (see [Config.prootBinary]) — no chroot, guest root stays
+     * the host FS. proot's seccomp acceleration keeps the data-path syscalls
+     * native, so only path lookups pay the ptrace cost. Falls back to a bare
+     * exec when proot isn't bundled.
+     */
+    private fun buildCommand(bin: File): List<String> {
+        if (!useProot()) {
+            NodeLog.append("launching core directly (proot not bundled)")
+            return coreArgs(bin)
+        }
+        val proot = Config.prootBinary(ctx)
+        val loader = Config.prootLoader(ctx)
+        if (!proot.canExecute()) proot.setExecutable(true, false)
+        if (!loader.canExecute()) loader.setExecutable(true, false)
+        Config.writeResolvConf(ctx)
+        NodeLog.append("launching core via proot (DNS shim)")
+        return listOf(
+            proot.absolutePath,
+            "--kill-on-exit",
+            "-b", "${Config.resolvConf(ctx).absolutePath}:/etc/resolv.conf",
+        ) + coreArgs(bin)
     }
 
     private fun pumpLogs(reader: BufferedReader) {

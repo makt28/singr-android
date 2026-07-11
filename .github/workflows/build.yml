@@ -89,6 +89,25 @@ jobs:
               print("PT_TLS already >=64 or absent; nothing to patch")
           PY
 
+      # DNS shim: the core is a CGO-disabled Go binary run as a standalone
+      # subprocess, so its resolver reads /etc/resolv.conf — which doesn't exist
+      # on Android, so panel lookups fall back to [::1]:53 and fail. We wrap the
+      # core in proot (ptrace-based, no root) purely to bind a real resolv.conf
+      # onto /etc/resolv.conf; see NativeRunner. proot + its loader must live in
+      # nativeLibraryDir (packaged as lib*.so) to be exec-able under Android W^X.
+      # Pinned by commit + sha256 so the download is immutable.
+      - name: Fetch proot (DNS shim)
+        run: |
+          set -euo pipefail
+          url="https://raw.githubusercontent.com/green-green-avk/build-proot-android/01f83b8841358450c78333d1b33ab30d4943bec4/packages/proot-android-aarch64.tar.gz"
+          curl -fsSL "$url" -o proot.tar.gz
+          echo "9629eb30cdf86e95c6ba681f8ab89c6fdaa9eca093d5577163513c99af5ca281  proot.tar.gz" | sha256sum -c -
+          tar xzf proot.tar.gz
+          install -D "root/bin/proot"            "app/src/main/jniLibs/arm64-v8a/libproot.so"
+          install -D "root/libexec/proot/loader" "app/src/main/jniLibs/arm64-v8a/libproot-loader.so"
+          file app/src/main/jniLibs/arm64-v8a/libproot.so \
+               app/src/main/jniLibs/arm64-v8a/libproot-loader.so
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
