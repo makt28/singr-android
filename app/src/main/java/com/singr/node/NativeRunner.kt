@@ -1,0 +1,104 @@
+package com.singr.node
+
+import android.content.Context
+import android.util.Log
+import java.io.BufferedReader
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
+
+/**
+ * Owns the `libsingr.so` subprocess: launch, stream logs, and a watchdog that
+ * respawns it on unexpected exit. All process control is serialized on this
+ * instance's monitor.
+ *
+ * Invocation mirrors the linux release:
+ *   libsingr.so -D <workdir> run -c server.json -p panel.json
+ */
+class NativeRunner(private val ctx: Context) {
+
+    private val stopping = AtomicBoolean(false)
+    private var process: Process? = null
+    private var watchdog: Thread? = null
+
+    @Synchronized
+    fun start() {
+        if (watchdog?.isAlive == true) return
+        stopping.set(false)
+        ensureConfigs()
+        watchdog = thread(name = "singr-watchdog", isDaemon = true) { runLoop() }
+    }
+
+    @Synchronized
+    fun stop() {
+        stopping.set(true)
+        process?.destroy()
+        process = null
+    }
+
+    private fun runLoop() {
+        var backoffMs = 1_000L
+        while (!stopping.get()) {
+            val bin = Config.coreBinary(ctx)
+            if (!bin.canExecute()) bin.setExecutable(true, false)
+
+            val started = System.currentTimeMillis()
+            try {
+                val p = ProcessBuilder(
+                    bin.absolutePath,
+                    "-D", Config.workDir(ctx).absolutePath,
+                    "run",
+                    "-c", Config.serverConfig(ctx).name,
+                    "-p", Config.panelConfig(ctx).name,
+                ).apply {
+                    directory(Config.workDir(ctx))
+                    redirectErrorStream(true)
+                }.start()
+
+                synchronized(this) { process = p }
+                pumpLogs(p.inputStream.bufferedReader())
+                val code = p.waitFor()
+                Log.w(Config.TAG, "core exited code=$code")
+            } catch (t: Throwable) {
+                Log.e(Config.TAG, "core launch failed", t)
+            }
+
+            if (stopping.get()) break
+
+            // Reset backoff if the process had stayed up a while; otherwise grow
+            // it (capped) so a crash-looping config doesn't peg the CPU.
+            backoffMs = if (System.currentTimeMillis() - started > 30_000) 1_000L
+            else (backoffMs * 2).coerceAtMost(30_000L)
+            Log.w(Config.TAG, "restarting core in ${backoffMs}ms")
+            try { Thread.sleep(backoffMs) } catch (_: InterruptedException) { break }
+        }
+        Log.i(Config.TAG, "watchdog loop ended")
+    }
+
+    private fun pumpLogs(reader: BufferedReader) {
+        reader.useLines { lines ->
+            for (line in lines) {
+                if (stopping.get()) break
+                Log.i(Config.TAG, "[core] $line")
+            }
+        }
+    }
+
+    /**
+     * Make sure server.json / panel.json exist in the work dir. server.json is
+     * seeded from bundled assets on first run; panel.json must be provisioned
+     * by the operator (MainActivity) — a node with no panel config is inert.
+     */
+    private fun ensureConfigs() {
+        val server = Config.serverConfig(ctx)
+        if (!server.exists()) {
+            runCatching {
+                ctx.assets.open("server.json").use { input ->
+                    server.outputStream().use { input.copyTo(it) }
+                }
+            }.onFailure { Log.w(Config.TAG, "no bundled server.json in assets", it) }
+        }
+        if (!Config.panelConfig(ctx).exists()) {
+            Log.w(Config.TAG, "panel.json missing — provision it before the node can serve")
+        }
+    }
+}

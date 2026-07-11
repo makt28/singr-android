@@ -1,0 +1,13 @@
+.gradle/
+build/
+/local.properties
+/.idea/
+*.iml
+.DS_Store
+/captures
+# The SingR core is fetched by CI from a SingR release; never commit it.
+app/src/main/jniLibs/**/libsingr.so
+# Signing material
+*.keystore
+*.jks
+keystore.properties

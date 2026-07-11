@@ -1,0 +1,2 @@
+# libsingr.so is dropped here by CI (build.yml) from the pinned SingR release.
+# It is git-ignored on purpose — never commit the binary.

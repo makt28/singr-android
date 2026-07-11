@@ -1,0 +1,94 @@
+name: Build APK
+
+# Manually triggered. On run it pulls the SingR release Android package —
+# the latest by default, or a specific tag if you pass one — and builds the APK.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "SingR release tag to bundle (leave blank = latest)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CORE_REPO: makt28/SingR
+  CORE_ASSET: SingR-android-arm64.tar.gz
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Hoisted to job level so the signing step's `if:` can see it.
+      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve SingR release tag
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$INPUT_TAG" ]]; then
+            tag="$INPUT_TAG"
+          else
+            # No tag == GitHub's /releases/latest (newest *published*, not
+            # semver-sorted), which correctly points to the newest SingR
+            # release even though `gh release list` would bury it.
+            tag="$(gh release view -R "$CORE_REPO" --json tagName -q .tagName)"
+          fi
+          echo "Resolved SingR tag: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Stamp it so the APK's versionName reflects the bundled core.
+          printf '%s\n' "$tag" > SINGR_VERSION
+
+      - name: Fetch SingR core (${{ steps.ver.outputs.tag }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.tag }}"
+          gh release download "$tag" -R "$CORE_REPO" \
+            -p "$CORE_ASSET" -p "$CORE_ASSET.sha256"
+          sha256sum -c "$CORE_ASSET.sha256"
+          tar xzf "$CORE_ASSET"
+          install -D "SingR-android-arm64/libsingr.so" \
+            "app/src/main/jniLibs/arm64-v8a/libsingr.so"
+          file app/src/main/jniLibs/arm64-v8a/libsingr.so
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Optional release signing
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_B64" | base64 -d > release.keystore
+          cat > keystore.properties <<EOF
+          storeFile=$(pwd)/release.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build
+        run: gradle --no-daemon assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: singr-node-apk-${{ steps.ver.outputs.tag }}
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

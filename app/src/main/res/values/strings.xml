@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">SingR Node</string>
+    <string name="label_panel">panel.json (SSPanel URL + key + node id)</string>
+    <string name="hint_panel">{ "ApiHost": "...", "Key": "...", "NodeID": 0, ... }</string>
+    <string name="hint_alwayson">Dedicated box: enable system Always-on VPN + Lockdown and whitelist battery so the node restarts on kill/boot.</string>
+    <string name="btn_save">Save panel.json</string>
+    <string name="btn_start">Start node</string>
+    <string name="btn_stop">Stop node</string>
+    <string name="btn_battery">Battery optimization settings</string>
+</resources>
