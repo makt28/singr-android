@@ -57,6 +57,38 @@ jobs:
             "app/src/main/jniLibs/arm64-v8a/libsingr.so"
           file app/src/main/jniLibs/arm64-v8a/libsingr.so
 
+      # Android 14+ (API 34) 的 Bionic 加载器要求 arm64 的 PT_TLS 段 p_align >= 64。
+      # Go 内链的 PIE 只标 8,加载器会在运行前 abort（"TLS segment is underaligned"，
+      # SIGABRT / exit 134）。这里把 PT_TLS 的 p_align 8 -> 64：只改 ELF 头一个字段，
+      # 不动代码/数据，64 是比 8 更强的对齐（64 对齐必然也 8 对齐），Go 的 TLS 布局不变。
+      # sha256 已在上一步校验完，补丁在其后进行，来源仍可溯。
+      - name: Patch PT_TLS alignment for Android 14+
+        run: |
+          python3 - <<'PY'
+          import struct
+          path = "app/src/main/jniLibs/arm64-v8a/libsingr.so"
+          buf = bytearray(open(path, "rb").read())
+          assert buf[:4] == b"\x7fELF" and buf[4] == 2, "expected ELF64"
+          e_phoff     = struct.unpack_from("<Q", buf, 0x20)[0]  # program-header table offset
+          e_phentsize = struct.unpack_from("<H", buf, 0x36)[0]  # size of one entry
+          e_phnum     = struct.unpack_from("<H", buf, 0x38)[0]  # number of entries
+          PT_TLS = 7
+          patched = 0
+          for i in range(e_phnum):
+              ph = e_phoff + i * e_phentsize
+              if struct.unpack_from("<I", buf, ph)[0] == PT_TLS:
+                  align_off = ph + 0x30                         # p_align field (ELF64 phdr +48)
+                  cur = struct.unpack_from("<Q", buf, align_off)[0]
+                  if cur < 64:
+                      struct.pack_into("<Q", buf, align_off, 64)
+                      patched += 1
+                      print(f"PT_TLS p_align {cur} -> 64")
+          if patched:
+              open(path, "wb").write(buf)
+          else:
+              print("PT_TLS already >=64 or absent; nothing to patch")
+          PY
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
