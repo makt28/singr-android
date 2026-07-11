@@ -33,6 +33,8 @@ class NativeRunner(private val ctx: Context) {
         stopping.set(true)
         process?.destroy()
         process = null
+        NodeLog.append("stopped by user")
+        NodeLog.setState(NodeLog.State.STOPPED)
     }
 
     private fun runLoop() {
@@ -55,11 +57,15 @@ class NativeRunner(private val ctx: Context) {
                 }.start()
 
                 synchronized(this) { process = p }
+                NodeLog.append("core started (pid ${p.pid()})")
+                NodeLog.setState(NodeLog.State.RUNNING)
                 pumpLogs(p.inputStream.bufferedReader())
                 val code = p.waitFor()
                 Log.w(Config.TAG, "core exited code=$code")
+                NodeLog.append("core exited code=$code")
             } catch (t: Throwable) {
                 Log.e(Config.TAG, "core launch failed", t)
+                NodeLog.append("launch failed: ${t.message}")
             }
 
             if (stopping.get()) break
@@ -69,9 +75,12 @@ class NativeRunner(private val ctx: Context) {
             backoffMs = if (System.currentTimeMillis() - started > 30_000) 1_000L
             else (backoffMs * 2).coerceAtMost(30_000L)
             Log.w(Config.TAG, "restarting core in ${backoffMs}ms")
+            NodeLog.setState(NodeLog.State.RESTARTING)
+            NodeLog.append("restarting in ${backoffMs}ms")
             try { Thread.sleep(backoffMs) } catch (_: InterruptedException) { break }
         }
         Log.i(Config.TAG, "watchdog loop ended")
+        NodeLog.setState(NodeLog.State.STOPPED)
     }
 
     private fun pumpLogs(reader: BufferedReader) {
@@ -79,6 +88,7 @@ class NativeRunner(private val ctx: Context) {
             for (line in lines) {
                 if (stopping.get()) break
                 Log.i(Config.TAG, "[core] $line")
+                NodeLog.append(line)
             }
         }
     }

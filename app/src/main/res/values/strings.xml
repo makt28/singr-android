@@ -14,6 +14,16 @@
     <string name="btn_delete">删除</string>
     <string name="hint_nodes">开启的节点会一起启动。专用机建议开启系统 Always-on VPN + Lockdown，并加入电池白名单，被杀或重启后自动拉起。改动配置后需停止再启动才生效。</string>
 
+    <!-- run status / log -->
+    <string name="status_stopped">● 已停止</string>
+    <string name="status_running">● 运行中</string>
+    <string name="status_restarting">● 崩溃重启中</string>
+    <string name="log_title">运行日志</string>
+    <string name="log_copy">复制</string>
+    <string name="log_clear">清空</string>
+    <string name="log_empty">暂无日志。点“启动”后这里会显示 core 的输出。</string>
+    <string name="log_copied">日志已复制</string>
+
     <!-- node edit -->
     <string name="label_name">名称（可选）</string>
     <string name="label_type">节点类型</string>

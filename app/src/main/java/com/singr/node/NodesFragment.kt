@@ -1,5 +1,8 @@
 package com.singr.node
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -8,8 +11,11 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -48,11 +54,51 @@ class NodesFragment : Fragment(R.layout.fragment_nodes) {
         view.findViewById<View>(R.id.btnBattery).setOnClickListener {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
+        view.findViewById<View>(R.id.btnLogCopy).setOnClickListener { copyLog() }
+        view.findViewById<View>(R.id.btnLogClear).setOnClickListener { NodeLog.clear() }
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+        // Push updates from the (background) watchdog thread onto the UI thread.
+        NodeLog.observe { view?.post { renderRunState() } }
+        renderRunState()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        NodeLog.observe(null)
+    }
+
+    private fun renderRunState() {
+        val v = view ?: return
+        val status = v.findViewById<TextView>(R.id.tvStatus)
+        val (textRes, colorRes) = when (NodeLog.state) {
+            NodeLog.State.RUNNING -> R.string.status_running to android.R.color.holo_green_dark
+            NodeLog.State.RESTARTING -> R.string.status_restarting to android.R.color.holo_orange_dark
+            NodeLog.State.STOPPED -> R.string.status_stopped to android.R.color.darker_gray
+        }
+        status.setText(textRes)
+        status.setTextColor(ContextCompat.getColor(requireContext(), colorRes))
+
+        val log = v.findViewById<TextView>(R.id.tvLog)
+        val lines = NodeLog.snapshot()
+        if (lines.isEmpty()) {
+            log.setText(R.string.log_empty)
+        } else {
+            log.text = lines.joinToString("\n")
+            val scroll = v.findViewById<ScrollView>(R.id.logScroll)
+            scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        }
+    }
+
+    private fun copyLog() {
+        val text = NodeLog.snapshot().joinToString("\n")
+        if (text.isEmpty()) return
+        val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("singr log", text))
+        toast(getString(R.string.log_copied))
     }
 
     private fun refresh() {
