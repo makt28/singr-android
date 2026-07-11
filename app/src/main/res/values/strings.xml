@@ -1,10 +1,17 @@
 <resources>
     <string name="app_name">SingR Node</string>
-    <string name="label_panel">panel.json (SSPanel URL + key + node id)</string>
-    <string name="hint_panel">{ "ApiHost": "...", "Key": "...", "NodeID": 0, ... }</string>
-    <string name="hint_alwayson">Dedicated box: enable system Always-on VPN + Lockdown and whitelist battery so the node restarts on kill/boot.</string>
-    <string name="btn_save">Save panel.json</string>
-    <string name="btn_start">Start node</string>
-    <string name="btn_stop">Stop node</string>
-    <string name="btn_battery">Battery optimization settings</string>
+    <string name="label_apihost">API 地址</string>
+    <string name="label_apikey">Key</string>
+    <string name="label_nodeid">Node ID</string>
+    <string name="label_type">节点类型</string>
+    <string name="label_cert">证书文件 (.crt / .pem)</string>
+    <string name="label_key">私钥文件 (.key)</string>
+    <string name="btn_pick">选择文件</string>
+    <string name="btn_save">保存配置</string>
+    <string name="btn_start">启动节点</string>
+    <string name="btn_stop">停止节点</string>
+    <string name="btn_battery">电池优化设置</string>
+    <string name="none">未选择</string>
+    <string name="file_saved">已保存</string>
+    <string name="hint_alwayson">专用机建议：系统设置里开启 Always-on VPN + Lockdown，并把本应用加入电池优化白名单，节点被杀或重启后会自动拉起。</string>
 </resources>

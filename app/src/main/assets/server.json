@@ -1,3 +1,0 @@
-{
-  "COMMENT": "Placeholder. Replace with the v6 node server.json from the SingR release (release/poet/server_anytls.json), with the anytls/hysteria2 inbound listening on '::'. Seeded into filesDir on first run by NativeRunner.ensureConfigs()."
-}
