@@ -6,7 +6,7 @@ import java.util.Locale
 
 /**
  * Process-wide, in-memory view of the core subprocess: a coarse run state plus a
- * bounded ring buffer of recent log lines. The VpnService/NativeRunner and the
+ * bounded ring buffer of recent log lines. The VpnService/BoxRunner and the
  * Activity share one app process, so the UI can read this directly — no IPC.
  *
  * All logs already go to logcat; this exists so the state is visible *in the

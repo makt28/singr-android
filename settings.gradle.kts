@@ -10,6 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // The SingR core ships as a local gomobile AAR (libbox) under app/libs,
+        // fetched from a SingR release by CI / dev setup (not committed).
+        flatDir { dirs("app/libs") }
     }
 }
 

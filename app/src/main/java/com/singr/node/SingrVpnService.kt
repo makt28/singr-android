@@ -17,15 +17,17 @@ import com.singr.node.R
  * node's own traffic, the tun is deliberately inert:
  *   - one address, one throwaway route (RFC5737/RFC3849 documentation ranges,
  *     so essentially nothing real is routed into tun),
- *   - `addDisallowedApplication(self)` — the libsingr.so subprocess shares our
- *     UID, so it always bypasses the tun and dials the internet directly.
+ *   - `addDisallowedApplication(self)` — the libbox core runs in-process (our
+ *     UID), so it always bypasses the tun and dials the internet directly.
  *
- * We never read the tun fd; it exists only to keep the VPN "connected".
+ * We never read the tun fd; it exists only to keep the VPN "connected". The
+ * core itself no longer uses any tun — it's an inbound-only node run via
+ * BoxRunner/libbox; this VpnService is purely a keep-alive anchor.
  */
 class SingrVpnService : VpnService() {
 
     private var tun: ParcelFileDescriptor? = null
-    private val runner by lazy { NativeRunner(this) }
+    private val runner by lazy { BoxRunner(this) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {

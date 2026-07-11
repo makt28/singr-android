@@ -6,7 +6,11 @@ build/
 .DS_Store
 /captures
 # The SingR core is fetched by CI from a SingR release; never commit it.
+# (legacy standalone binary path, kept ignored for older checkouts)
 app/src/main/jniLibs/**/libsingr.so
+# SingR is now embedded as a gomobile AAR (libbox), fetched from a SingR
+# release by CI / dev setup. It's ~95MB — never commit it.
+app/libs/SingR-android.aar
 # Signing material
 *.keystore
 *.jks

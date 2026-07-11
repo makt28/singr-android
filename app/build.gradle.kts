@@ -46,12 +46,12 @@ android {
         }
     }
 
-    // CRITICAL: extract libsingr.so to nativeLibraryDir so it can be exec'd.
-    // Without legacy packaging the .so stays compressed inside the APK and is
-    // not a runnable file on disk.
+    // libbox's native lib (from the AAR) is loaded via System.loadLibrary, not
+    // exec'd, so legacy packaging is no longer required. Keep the AAR's other
+    // ABIs out via abiFilters (arm64 only) to avoid a ~250MB APK.
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging = false
         }
     }
 
@@ -73,6 +73,10 @@ android {
 }
 
 dependencies {
+    // SingR core, embedded as a gomobile library (io.nekohasekai.libbox.*).
+    // File: app/libs/SingR-android.aar (flatDir repo; fetched, not committed).
+    implementation(group = "", name = "SingR-android", ext = "aar")
+
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

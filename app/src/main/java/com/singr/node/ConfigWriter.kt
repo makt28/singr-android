@@ -12,8 +12,8 @@ import java.io.File
  * so multiple nodes run in one process — poet starts one controller per node.
  *
  * Android-specific vs the SingR samples:
- *   - log has NO file `output` → stdout (NativeRunner captures it); the sample's
- *     /var/log/singr.log is not writable on Android.
+ *   - log `output` points at filesDir/box.log (BoxRunner tails it into the UI);
+ *     the sample's /var/log/singr.log is not writable on Android.
  *   - certificate_path / key_path point at per-node files under filesDir (SAF
  *     URIs are not real paths, so picked files are copied there first).
  *   - listen_port stays 0: the real port is delivered by the panel node info.
@@ -77,7 +77,13 @@ object ConfigWriter {
         outbounds.put(directOut("direct")) // shared fallback
 
         return JSONObject()
-            .put("log", JSONObject().put("disabled", false).put("level", "info").put("timestamp", true))
+            .put(
+                "log",
+                JSONObject().put("disabled", false).put("level", "info").put("timestamp", true)
+                    // libbox runs in-process (no stdout to capture), so write to a
+                    // file BoxRunner tails. filesDir is writable, unlike /var/log.
+                    .put("output", Config.boxLog(ctx).absolutePath),
+            )
             .put(
                 "dns",
                 JSONObject()

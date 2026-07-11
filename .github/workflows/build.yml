@@ -15,7 +15,8 @@ permissions:
 
 env:
   CORE_REPO: makt28/SingR
-  CORE_ASSET: SingR-android-arm64.tar.gz
+  # SingR now ships as a gomobile AAR (libbox); the app embeds it in-process.
+  CORE_ASSET: SingR-android.aar
 
 jobs:
   build:
@@ -43,7 +44,13 @@ jobs:
           # Stamp it so the APK's versionName reflects the bundled core.
           printf '%s\n' "$tag" > SINGR_VERSION
 
-      - name: Fetch SingR core (${{ steps.ver.outputs.tag }})
+      # SingR now ships as a gomobile AAR (libbox) — the app embeds it in-process
+      # via a PlatformInterface, so sing-box gets interface info from Android
+      # instead of netlink. This replaces the old standalone-binary path and its
+      # Android shims (PT_TLS patch, proot DNS bind, CA bundle) — all gone: a
+      # CGO-enabled android build resolves DNS/certs natively. Drop the AAR into
+      # app/libs where the flatDir gradle repo picks it up (see settings.gradle).
+      - name: Fetch SingR AAR (${{ steps.ver.outputs.tag }})
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -52,76 +59,8 @@ jobs:
           gh release download "$tag" -R "$CORE_REPO" \
             -p "$CORE_ASSET" -p "$CORE_ASSET.sha256"
           sha256sum -c "$CORE_ASSET.sha256"
-          tar xzf "$CORE_ASSET"
-          install -D "SingR-android-arm64/libsingr.so" \
-            "app/src/main/jniLibs/arm64-v8a/libsingr.so"
-          file app/src/main/jniLibs/arm64-v8a/libsingr.so
-
-      # Android 14+ (API 34) 的 Bionic 加载器要求 arm64 的 PT_TLS 段 p_align >= 64。
-      # Go 内链的 PIE 只标 8,加载器会在运行前 abort（"TLS segment is underaligned"，
-      # SIGABRT / exit 134）。这里把 PT_TLS 的 p_align 8 -> 64：只改 ELF 头一个字段，
-      # 不动代码/数据，64 是比 8 更强的对齐（64 对齐必然也 8 对齐），Go 的 TLS 布局不变。
-      # sha256 已在上一步校验完，补丁在其后进行，来源仍可溯。
-      - name: Patch PT_TLS alignment for Android 14+
-        run: |
-          python3 - <<'PY'
-          import struct
-          path = "app/src/main/jniLibs/arm64-v8a/libsingr.so"
-          buf = bytearray(open(path, "rb").read())
-          assert buf[:4] == b"\x7fELF" and buf[4] == 2, "expected ELF64"
-          e_phoff     = struct.unpack_from("<Q", buf, 0x20)[0]  # program-header table offset
-          e_phentsize = struct.unpack_from("<H", buf, 0x36)[0]  # size of one entry
-          e_phnum     = struct.unpack_from("<H", buf, 0x38)[0]  # number of entries
-          PT_TLS = 7
-          patched = 0
-          for i in range(e_phnum):
-              ph = e_phoff + i * e_phentsize
-              if struct.unpack_from("<I", buf, ph)[0] == PT_TLS:
-                  align_off = ph + 0x30                         # p_align field (ELF64 phdr +48)
-                  cur = struct.unpack_from("<Q", buf, align_off)[0]
-                  if cur < 64:
-                      struct.pack_into("<Q", buf, align_off, 64)
-                      patched += 1
-                      print(f"PT_TLS p_align {cur} -> 64")
-          if patched:
-              open(path, "wb").write(buf)
-          else:
-              print("PT_TLS already >=64 or absent; nothing to patch")
-          PY
-
-      # DNS shim: the core is a CGO-disabled Go binary run as a standalone
-      # subprocess, so its resolver reads /etc/resolv.conf — which doesn't exist
-      # on Android, so panel lookups fall back to [::1]:53 and fail. We wrap the
-      # core in proot (ptrace-based, no root) purely to bind a real resolv.conf
-      # onto /etc/resolv.conf; see NativeRunner. proot + its loader must live in
-      # nativeLibraryDir (packaged as lib*.so) to be exec-able under Android W^X.
-      # Pinned by commit + sha256 so the download is immutable.
-      - name: Fetch proot (DNS shim)
-        run: |
-          set -euo pipefail
-          url="https://raw.githubusercontent.com/green-green-avk/build-proot-android/01f83b8841358450c78333d1b33ab30d4943bec4/packages/proot-android-aarch64.tar.gz"
-          curl -fsSL "$url" -o proot.tar.gz
-          echo "9629eb30cdf86e95c6ba681f8ab89c6fdaa9eca093d5577163513c99af5ca281  proot.tar.gz" | sha256sum -c -
-          tar xzf proot.tar.gz
-          install -D "root/bin/proot"            "app/src/main/jniLibs/arm64-v8a/libproot.so"
-          install -D "root/libexec/proot/loader" "app/src/main/jniLibs/arm64-v8a/libproot-loader.so"
-          file app/src/main/jniLibs/arm64-v8a/libproot.so \
-               app/src/main/jniLibs/arm64-v8a/libproot-loader.so
-
-      # TLS roots: the core is a GOOS=linux binary, so Go's x509 looks for CA
-      # bundles at Linux paths (/etc/ssl/certs/...) that don't exist on Android
-      # → "certificate signed by unknown authority" on the panel HTTPS request.
-      # Ship Mozilla's CA bundle (curl.se) as an asset; NativeRunner binds it
-      # onto /etc/ssl/certs/ca-certificates.crt via proot, same shim as DNS.
-      # Not sha-pinned (the bundle tracks upstream root changes); instead we
-      # verify against curl's published checksum so it stays current + intact.
-      - name: Fetch CA bundle (Go on Android has no system roots)
-        run: |
-          set -euo pipefail
-          curl -fsSL "https://curl.se/ca/cacert.pem" -o cacert.pem
-          curl -fsSL "https://curl.se/ca/cacert.pem.sha256" -o cacert.pem.sha256
-          sha256sum -c cacert.pem.sha256
-          install -D cacert.pem app/src/main/assets/cacert.pem
+          install -D "$CORE_ASSET" "app/libs/$CORE_ASSET"
+          ls -lh "app/libs/$CORE_ASSET"
 
       - uses: actions/setup-java@v4
         with:
