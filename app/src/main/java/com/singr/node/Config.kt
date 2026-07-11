@@ -37,6 +37,24 @@ object Config {
         resolvConf(ctx).writeText("nameserver 8.8.8.8\nnameserver 2001:4860:4860::8888\n")
     }
 
+    /**
+     * CA bundle for the core's TLS: it's a GOOS=linux Go binary, so x509 hunts
+     * for roots at Linux paths absent on Android. The Mozilla bundle is shipped
+     * as an asset (build.yml) and proot-bound onto /etc/ssl/certs/ca-certificates
+     * .crt. Copied out of assets to filesDir so proot has a real path to bind.
+     */
+    fun caBundle(ctx: Context): File = File(workDir(ctx), "cacert.pem")
+
+    /** Extract the shipped CA bundle to filesDir; false if none was bundled. */
+    fun extractCaBundle(ctx: Context): Boolean = try {
+        ctx.assets.open("cacert.pem").use { input ->
+            caBundle(ctx).outputStream().use { input.copyTo(it) }
+        }
+        true
+    } catch (_: Exception) {
+        false
+    }
+
     /** Working directory the core runs in; holds server.json / panel.json. */
     fun workDir(ctx: Context): File = ctx.filesDir
 

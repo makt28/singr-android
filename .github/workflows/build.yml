@@ -108,6 +108,21 @@ jobs:
           file app/src/main/jniLibs/arm64-v8a/libproot.so \
                app/src/main/jniLibs/arm64-v8a/libproot-loader.so
 
+      # TLS roots: the core is a GOOS=linux binary, so Go's x509 looks for CA
+      # bundles at Linux paths (/etc/ssl/certs/...) that don't exist on Android
+      # → "certificate signed by unknown authority" on the panel HTTPS request.
+      # Ship Mozilla's CA bundle (curl.se) as an asset; NativeRunner binds it
+      # onto /etc/ssl/certs/ca-certificates.crt via proot, same shim as DNS.
+      # Not sha-pinned (the bundle tracks upstream root changes); instead we
+      # verify against curl's published checksum so it stays current + intact.
+      - name: Fetch CA bundle (Go on Android has no system roots)
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://curl.se/ca/cacert.pem" -o cacert.pem
+          curl -fsSL "https://curl.se/ca/cacert.pem.sha256" -o cacert.pem.sha256
+          sha256sum -c cacert.pem.sha256
+          install -D cacert.pem app/src/main/assets/cacert.pem
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

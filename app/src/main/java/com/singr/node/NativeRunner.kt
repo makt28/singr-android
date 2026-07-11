@@ -114,11 +114,21 @@ class NativeRunner(private val ctx: Context) {
         if (!loader.canExecute()) loader.setExecutable(true, false)
         Config.writeResolvConf(ctx)
         NodeLog.append("launching core via proot (DNS shim)")
-        return listOf(
-            proot.absolutePath,
-            "--kill-on-exit",
+
+        val binds = mutableListOf(
+            // The Go resolver reads /etc/resolv.conf, absent on Android.
             "-b", "${Config.resolvConf(ctx).absolutePath}:/etc/resolv.conf",
-        ) + coreArgs(bin)
+        )
+        // GOOS=linux x509 reads Linux CA paths; bind our bundle onto the first
+        // one it checks so the panel's HTTPS cert verifies.
+        if (Config.extractCaBundle(ctx)) {
+            binds += "-b"
+            binds += "${Config.caBundle(ctx).absolutePath}:/etc/ssl/certs/ca-certificates.crt"
+            NodeLog.append("CA bundle bound (/etc/ssl/certs/ca-certificates.crt)")
+        } else {
+            NodeLog.append("no CA bundle shipped — TLS verify may fail")
+        }
+        return listOf(proot.absolutePath, "--kill-on-exit") + binds + coreArgs(bin)
     }
 
     private fun pumpLogs(reader: BufferedReader) {
