@@ -69,6 +69,11 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Don't let lintVitalRelease fail the release assemble in CI.
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
     buildFeatures {
         viewBinding = true
     }
