@@ -7,29 +7,21 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Turns the simple form (apiHost / apiKey / nodeId / type + cert & key files)
- * into the `server.json` + `panel.json` the SingR binary expects. Mirrors
- * release/poet/{server,panel}_{anytls,hysteria2}.json from the SingR repo, with
- * two Android-specific changes:
- *   - log has NO file `output` → goes to stdout (NativeRunner captures it);
- *     the sample's /var/log/singr.log is not writable on Android.
- *   - certificate_path / key_path point at files under filesDir (SAF URIs are
- *     not real paths, so the picked files are copied there first).
+ * Turns the enabled node list into the `server.json` + `panel.json` the SingR
+ * binary expects. Each node gets a unique inbound/outbound tag (`<type>-in-<id>`)
+ * so multiple nodes run in one process — poet starts one controller per node.
  *
- * listen_port stays 0: the real port is delivered by the panel node info and
- * hot-reloaded by the inbound (same as the linux server).
+ * Android-specific vs the SingR samples:
+ *   - log has NO file `output` → stdout (NativeRunner captures it); the sample's
+ *     /var/log/singr.log is not writable on Android.
+ *   - certificate_path / key_path point at per-node files under filesDir (SAF
+ *     URIs are not real paths, so picked files are copied there first).
+ *   - listen_port stays 0: the real port is delivered by the panel node info.
  */
 object ConfigWriter {
 
-    data class Input(
-        val apiHost: String,
-        val apiKey: String,
-        val nodeId: Int,
-        val type: String, // "anytls" | "hysteria2"
-    )
-
-    fun copyCert(ctx: Context, uri: Uri) = copy(ctx, uri, Config.certFile(ctx))
-    fun copyKey(ctx: Context, uri: Uri) = copy(ctx, uri, Config.keyFile(ctx))
+    fun copyCert(ctx: Context, id: Int, uri: Uri) = copy(ctx, uri, Config.nodeCert(ctx, id))
+    fun copyKey(ctx: Context, id: Int, uri: Uri) = copy(ctx, uri, Config.nodeKey(ctx, id))
 
     private fun copy(ctx: Context, uri: Uri, dest: File) {
         ctx.contentResolver.openInputStream(uri)?.use { input ->
@@ -37,45 +29,55 @@ object ConfigWriter {
         } ?: error("无法打开所选文件")
     }
 
-    fun write(ctx: Context, input: Input) {
-        Config.serverConfig(ctx).writeText(serverJson(ctx, input.type))
-        Config.panelConfig(ctx).writeText(panelJson(input))
+    /** True if at least one enabled node was written. */
+    fun write(ctx: Context, nodes: List<NodeConfig>): Boolean {
+        val enabled = nodes.filter { it.enabled }
+        if (enabled.isEmpty()) return false
+        Config.serverConfig(ctx).writeText(serverJson(ctx, enabled))
+        Config.panelConfig(ctx).writeText(panelJson(enabled))
+        return true
     }
-
-    private fun inTag(type: String) = "$type-in"
-    private fun outTag(type: String) = "$type-out"
 
     private fun directOut(tag: String) = JSONObject()
         .put("type", "direct")
         .put("tag", tag)
         .put("domain_resolver", JSONObject().put("server", "google").put("strategy", "prefer_ipv6"))
 
-    private fun serverJson(ctx: Context, type: String): String {
+    private fun inbound(ctx: Context, n: NodeConfig): JSONObject {
         val tls = JSONObject()
             .put("enabled", true)
             .put("server_name", "")
-            .put("certificate_path", Config.certFile(ctx).absolutePath)
-            .put("key_path", Config.keyFile(ctx).absolutePath)
-
-        val inbound = JSONObject()
-            .put("type", type)
-            .put("tag", inTag(type))
+            .put("certificate_path", Config.nodeCert(ctx, n.id).absolutePath)
+            .put("key_path", Config.nodeKey(ctx, n.id).absolutePath)
+        val ib = JSONObject()
+            .put("type", n.type)
+            .put("tag", n.inTag)
             .put("listen", "::")
             .put("listen_port", 0)
             .put("users", JSONArray())
             .put("tls", tls)
-        if (type == "hysteria2") {
-            inbound.put("up_mbps", 0)
+        if (n.type == "hysteria2") {
+            ib.put("up_mbps", 0)
                 .put("down_mbps", 0)
                 .put("ignore_client_bandwidth", false)
                 .put("obfs", JSONObject().put("type", "salamander").put("password", ""))
         }
+        return ib
+    }
 
-        val root = JSONObject()
-            .put(
-                "log",
-                JSONObject().put("disabled", false).put("level", "info").put("timestamp", true),
-            )
+    private fun serverJson(ctx: Context, nodes: List<NodeConfig>): String {
+        val inbounds = JSONArray()
+        val outbounds = JSONArray()
+        val rules = JSONArray()
+        for (n in nodes) {
+            inbounds.put(inbound(ctx, n))
+            outbounds.put(directOut(n.outTag))
+            rules.put(JSONObject().put("inbound", n.inTag).put("outbound", n.outTag))
+        }
+        outbounds.put(directOut("direct")) // shared fallback
+
+        return JSONObject()
+            .put("log", JSONObject().put("disabled", false).put("level", "info").put("timestamp", true))
             .put(
                 "dns",
                 JSONObject()
@@ -87,40 +89,34 @@ object ConfigWriter {
                     )
                     .put("strategy", "prefer_ipv6"),
             )
-            .put("inbounds", JSONArray().put(inbound))
-            .put("outbounds", JSONArray().put(directOut(outTag(type))).put(directOut("direct")))
+            .put("inbounds", inbounds)
+            .put("outbounds", outbounds)
             .put(
                 "route",
-                JSONObject()
-                    .put(
-                        "rules",
-                        JSONArray().put(
-                            JSONObject().put("inbound", inTag(type)).put("outbound", outTag(type)),
-                        ),
-                    )
-                    .put("final", "direct")
-                    .put("auto_detect_interface", false),
+                JSONObject().put("rules", rules).put("final", "direct").put("auto_detect_interface", false),
             )
-        return root.toString(2)
+            .toString(2)
     }
 
-    private fun panelJson(input: Input): String {
-        val node = JSONObject()
-            .put("paneltype", "SSpanel")
-            .put("intag", inTag(input.type))
-            .put("outtag", outTag(input.type))
-            .put(
-                "apiconfig",
+    private fun panelJson(nodes: List<NodeConfig>): String {
+        val arr = JSONArray()
+        for (n in nodes) {
+            arr.put(
                 JSONObject()
-                    .put("apihost", input.apiHost)
-                    .put("apikey", input.apiKey)
-                    .put("nodeid", input.nodeId)
-                    .put("nodetype", "V2ray")
-                    .put("disablecustomconfig", true),
+                    .put("paneltype", "SSpanel")
+                    .put("intag", n.inTag)
+                    .put("outtag", n.outTag)
+                    .put(
+                        "apiconfig",
+                        JSONObject()
+                            .put("apihost", n.apiHost)
+                            .put("apikey", n.apiKey)
+                            .put("nodeid", n.nodeId)
+                            .put("nodetype", "V2ray")
+                            .put("disablecustomconfig", true),
+                    ),
             )
-        return JSONObject()
-            .put("name", "singr-android")
-            .put("nodes", JSONArray().put(node))
-            .toString(2)
+        }
+        return JSONObject().put("name", "singr-android").put("nodes", arr).toString(2)
     }
 }

@@ -1,17 +1,45 @@
 <resources>
     <string name="app_name">SingR Node</string>
+
+    <!-- tabs -->
+    <string name="tab_nodes">节点配置</string>
+    <string name="tab_porthop">端口跳跃</string>
+    <string name="tab_ddns">DDNS</string>
+
+    <!-- node list -->
+    <string name="btn_add_node">添加节点</string>
+    <string name="btn_start">启动</string>
+    <string name="btn_stop">停止</string>
+    <string name="btn_battery_short">电池</string>
+    <string name="btn_delete">删除</string>
+    <string name="hint_nodes">开启的节点会一起启动。专用机建议开启系统 Always-on VPN + Lockdown，并加入电池白名单，被杀或重启后自动拉起。改动配置后需停止再启动才生效。</string>
+
+    <!-- node edit -->
+    <string name="label_name">名称（可选）</string>
+    <string name="label_type">节点类型</string>
     <string name="label_apihost">API 地址</string>
     <string name="label_apikey">Key</string>
     <string name="label_nodeid">Node ID</string>
-    <string name="label_type">节点类型</string>
     <string name="label_cert">证书文件 (.crt / .pem)</string>
     <string name="label_key">私钥文件 (.key)</string>
     <string name="btn_pick">选择文件</string>
-    <string name="btn_save">保存配置</string>
-    <string name="btn_start">启动节点</string>
-    <string name="btn_stop">停止节点</string>
-    <string name="btn_battery">电池优化设置</string>
+    <string name="btn_save">保存</string>
     <string name="none">未选择</string>
     <string name="file_saved">已保存</string>
-    <string name="hint_alwayson">专用机建议：系统设置里开启 Always-on VPN + Lockdown，并把本应用加入电池优化白名单，节点被杀或重启后会自动拉起。</string>
+
+    <!-- port hopping -->
+    <string name="label_hop_range">UDP 端口范围</string>
+    <string name="label_hop_target">目标端口（该 hysteria2 节点的实际监听端口）</string>
+    <string name="btn_hop_apply">应用规则</string>
+    <string name="btn_hop_clear">清除规则</string>
+    <string name="hint_hop">端口跳跃靠 iptables/ip6tables 把一段 UDP 端口重定向到监听端口，需要 root。规则重启后失效，需重新应用。目标端口是面板下发的实际端口。</string>
+
+    <!-- ddns -->
+    <string name="ddns_enable">启用 DDNS</string>
+    <string name="ddns_provider_cf">Provider：Cloudflare（目标为本机全局 IPv6，自动获取）</string>
+    <string name="ddns_token">API Token</string>
+    <string name="ddns_zone">Zone ID</string>
+    <string name="ddns_record">Record ID</string>
+    <string name="ddns_name">域名</string>
+    <string name="hint_ddns">每 15 分钟把本机全局 IPv6 更新到该 AAAA 记录。关闭并保存会删除配置并停止更新。</string>
 </resources>

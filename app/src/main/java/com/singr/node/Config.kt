@@ -9,13 +9,8 @@ object Config {
     const val NOTIF_CHANNEL = "singr_node"
     const val NOTIF_ID = 1001
 
-    /** SharedPreferences: node state + last-used form values. */
     const val PREFS = "singr"
-    const val KEY_ENABLED = "enabled"
-    const val KEY_APIHOST = "apihost"
-    const val KEY_APIKEY = "apikey"
-    const val KEY_NODEID = "nodeid"
-    const val KEY_NODETYPE = "nodetype" // "anytls" | "hysteria2"
+    const val KEY_ENABLED = "enabled" // service (node runner) on/off
 
     /** The extracted, exec-able core (jniLibs → nativeLibraryDir). */
     fun coreBinary(ctx: Context): File =
@@ -27,11 +22,12 @@ object Config {
     fun serverConfig(ctx: Context): File = File(workDir(ctx), "server.json")
     fun panelConfig(ctx: Context): File = File(workDir(ctx), "panel.json")
 
-    /** TLS material copied out of the SAF picker into a real filesystem path. */
-    fun certFile(ctx: Context): File = File(workDir(ctx), "singr.crt")
-    fun keyFile(ctx: Context): File = File(workDir(ctx), "singr.key")
+    /** Per-node TLS material copied out of the SAF picker into real paths. */
+    fun nodeCert(ctx: Context, id: Int): File = File(workDir(ctx), "node-$id.crt")
+    fun nodeKey(ctx: Context, id: Int): File = File(workDir(ctx), "node-$id.key")
 
-    /** Optional DDNS config; absent → DDNS disabled. */
+    /** Persisted node list and DDNS config. */
+    fun nodesFile(ctx: Context): File = File(workDir(ctx), "nodes.json")
     fun ddnsConfig(ctx: Context): File = File(workDir(ctx), "ddns.json")
 
     fun isEnabled(ctx: Context): Boolean =

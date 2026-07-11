@@ -28,6 +28,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".NodeEditActivity"
+            android:exported="false" />
+
         <!-- Keep-alive VpnService. specialUse FGS type: this is not a normal
              VPN client; the tun is an inert keep-alive anchor. -->
         <service

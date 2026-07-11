@@ -46,7 +46,8 @@ class SingrVpnService : VpnService() {
         }
 
         runner.start()
-        DdnsWorker.schedule(this)
+        // DDNS is scheduled/cancelled from the DDNS tab; WorkManager persists it
+        // across reboots, so the service doesn't manage it.
 
         // START_STICKY: if the system kills us, recreate. Combined with
         // Always-on VPN this is the "dies -> restarts" guarantee.
