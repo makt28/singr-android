@@ -57,7 +57,7 @@ class NativeRunner(private val ctx: Context) {
                 }.start()
 
                 synchronized(this) { process = p }
-                NodeLog.append("core started (pid ${p.pid()})")
+                NodeLog.append("core started")
                 NodeLog.setState(NodeLog.State.RUNNING)
                 pumpLogs(p.inputStream.bufferedReader())
                 val code = p.waitFor()
