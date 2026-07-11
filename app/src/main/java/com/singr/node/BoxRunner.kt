@@ -24,11 +24,13 @@ import kotlin.concurrent.thread
 class BoxRunner(private val ctx: Context) : CommandServerHandler {
 
     private val stopping = AtomicBoolean(false)
+    private val started = AtomicBoolean(false)
     private var commandServer: CommandServer? = null
     private var logTail: Thread? = null
 
     @Synchronized
     fun start() {
+        if (!started.compareAndSet(false, true)) return
         stopping.set(false)
         try {
             ensureSetup(ctx)
@@ -45,6 +47,7 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
             Log.e(Config.TAG, "box start failed", t)
             NodeLog.append("box start failed: ${t.message}")
             stopInternal()
+            started.set(false)
             NodeLog.setState(NodeLog.State.STOPPED)
         }
     }
@@ -52,6 +55,7 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
     @Synchronized
     fun stop() {
         stopping.set(true)
+        started.set(false)
         stopInternal()
         NodeLog.append("stopped by user")
         NodeLog.setState(NodeLog.State.STOPPED)
@@ -93,6 +97,8 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
     }
 
     override fun serviceStop() {
+        stopping.set(true)
+        started.set(false)
         NodeLog.append("box requested stop")
         stopInternal()
         NodeLog.setState(NodeLog.State.STOPPED)
@@ -109,10 +115,12 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
 
     companion object {
         // Libbox.setup is process-global and must run exactly once.
-        private val setupDone = AtomicBoolean(false)
+        @Volatile
+        private var setupDone = false
 
+        @Synchronized
         private fun ensureSetup(ctx: Context) {
-            if (setupDone.getAndSet(true)) return
+            if (setupDone) return
             Libbox.setup(
                 SetupOptions().apply {
                     basePath = Config.workDir(ctx).absolutePath
@@ -124,6 +132,9 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
                     fixAndroidStack = true
                 },
             )
+            // Commit the process-global state only after setup succeeds, so a
+            // recoverable setup exception does not poison every later retry.
+            setupDone = true
             runCatching {
                 Libbox.redirectStderr(File(Config.workDir(ctx), "stderr.log").absolutePath)
             }

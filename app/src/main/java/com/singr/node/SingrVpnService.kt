@@ -8,6 +8,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.singr.node.R
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * Keep-alive anchor, NOT a traffic tunnel.
@@ -28,6 +30,9 @@ class SingrVpnService : VpnService() {
 
     private var tun: ParcelFileDescriptor? = null
     private val runner by lazy { BoxRunner(this) }
+    private val coreExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "singr-core")
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -47,7 +52,9 @@ class SingrVpnService : VpnService() {
             }
         }
 
-        runner.start()
+        // libbox setup and service startup can block and must not run on the
+        // service's main thread. BoxRunner also ignores duplicate starts.
+        coreExecutor.execute { runner.start() }
         // DDNS is scheduled/cancelled from the DDNS tab; WorkManager persists it
         // across reboots, so the service doesn't manage it.
 
@@ -89,7 +96,7 @@ class SingrVpnService : VpnService() {
 
     private fun stopSelfCleanly() {
         Config.setEnabled(this, false)
-        runner.stop()
+        stopRunnerAsync()
         runCatching { tun?.close() }
         tun = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -103,9 +110,18 @@ class SingrVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        runner.stop()
+        stopRunnerAsync()
+        coreExecutor.shutdown()
         runCatching { tun?.close() }
         super.onDestroy()
+    }
+
+    private fun stopRunnerAsync() {
+        try {
+            coreExecutor.execute { runner.stop() }
+        } catch (_: RejectedExecutionException) {
+            // onDestroy may be reached after the executor has already stopped.
+        }
     }
 
     companion object {

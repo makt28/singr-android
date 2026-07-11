@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.HandlerThread
 import android.system.Os
 import android.util.Log
 import io.nekohasekai.libbox.ConnectionOwner
@@ -43,10 +45,11 @@ class SingrPlatform(private val ctx: Context) : PlatformInterface {
                 notify(network, listener)
         }
         synchronized(callbacks) { callbacks[listener] = callback }
-        cm.registerDefaultNetworkCallback(callback)
-        // Nudge an initial value so the box doesn't block waiting for the first
-        // callback if a network is already up.
-        cm.activeNetwork?.let { notify(it, listener) }
+        // Always deliver callbacks on another thread. In particular, never call
+        // listener.updateDefaultInterface() while this Go -> Kotlin call is
+        // still on the stack: re-entering Go synchronously can abort gomobile's
+        // runtime with "stack split at bad time" (golang/go#68760).
+        cm.registerDefaultNetworkCallback(callback, networkHandler)
     }
 
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
@@ -112,4 +115,11 @@ class SingrPlatform(private val ctx: Context) : PlatformInterface {
     override fun underNetworkExtension(): Boolean = false
     override fun clearDNSCache() {}
     override fun sendNotification(notification: Notification) {}
+
+    companion object {
+        // Shared for the process: each BoxRunner restart creates a new platform
+        // instance, so an instance-owned HandlerThread would leak on every run.
+        private val networkThread = HandlerThread("singr-network").apply { start() }
+        private val networkHandler = Handler(networkThread.looper)
+    }
 }
