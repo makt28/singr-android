@@ -81,7 +81,12 @@ class SingrPlatform(private val ctx: Context) : PlatformInterface {
                 entry.index = nif.index
                 entry.mtu = runCatching { nif.mtu }.getOrDefault(0)
                 entry.addresses = StringArrayIterator(
-                    nif.interfaceAddresses.mapNotNull { it.address?.hostAddress },
+                    nif.interfaceAddresses.mapNotNull { interfaceAddress ->
+                        val host = interfaceAddress.address?.hostAddress
+                            ?.substringBefore('%')
+                            ?: return@mapNotNull null
+                        "$host/${interfaceAddress.networkPrefixLength}"
+                    },
                 )
                 var flags = 0
                 if (nif.isUp) flags = flags or 1        // IFF_UP

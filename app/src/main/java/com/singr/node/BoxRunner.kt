@@ -5,6 +5,7 @@ import android.util.Log
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.SetupOptions
 import io.nekohasekai.libbox.SystemProxyStatus
 import java.io.File
@@ -40,7 +41,7 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
             server.start()
             commandServer = server
             NodeLog.append("starting box (libbox)")
-            server.startOrReloadService(Config.serverConfig(ctx).readText(), null)
+            server.startOrReloadService(Config.serverConfig(ctx).readText(), OverrideOptions())
             NodeLog.append("box started")
             NodeLog.setState(NodeLog.State.RUNNING)
         } catch (t: Throwable) {
@@ -92,7 +93,9 @@ class BoxRunner(private val ctx: Context) : CommandServerHandler {
 
     override fun serviceReload() {
         commandServer?.let { s ->
-            runCatching { s.startOrReloadService(Config.serverConfig(ctx).readText(), null) }
+            runCatching {
+                s.startOrReloadService(Config.serverConfig(ctx).readText(), OverrideOptions())
+            }
         }
     }
 
