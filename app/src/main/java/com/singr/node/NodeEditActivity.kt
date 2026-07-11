@@ -3,6 +3,7 @@ package com.singr.node
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioButton
@@ -10,6 +11,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 
 /** Add (id == -1) or edit one node. */
 class NodeEditActivity : AppCompatActivity() {
@@ -28,6 +32,16 @@ class NodeEditActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_node_edit)
+
+        // edge-to-edge:表单在系统栏之外补 padding,避免首/尾控件被状态栏/导航栏遮挡。
+        val root = findViewById<View>(R.id.root)
+        val basePad = root.paddingTop  // XML 里四边都是 16dp
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(top = basePad + bars.top, bottom = basePad + bars.bottom)
+            insets
+        }
+
         id = intent.getIntExtra("id", -1)
 
         val existing = if (id >= 0) NodeStore.load(this).firstOrNull { it.id == id } else null
