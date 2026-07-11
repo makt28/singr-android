@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,13 +6,6 @@ plugins {
 // Surface the pinned SingR core version as the app's versionName suffix, so a
 // build self-reports which core it carries (matches SINGR_VERSION verbatim).
 val singrVersion = rootProject.file("SINGR_VERSION").readText().trim().removePrefix("v")
-
-// Optional signing config from keystore.properties (git-ignored). Absent → the
-// release build stays unsigned (CI injects real signing via secrets).
-val keystorePropsFile = rootProject.file("keystore.properties")
-val keystoreProps = Properties().apply {
-    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
-}
 
 android {
     namespace = "com.singr.node"
@@ -35,13 +26,15 @@ android {
     }
 
     signingConfigs {
-        if (keystoreProps.isNotEmpty()) {
-            create("release") {
-                storeFile = file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
-            }
+        create("release") {
+            // Committed, shared keystore so every build has the SAME signature
+            // and the node APK upgrades in place. The password is public on
+            // purpose (self-use node app) — the only downside is that anyone
+            // could sign an update with it, which is acceptable here.
+            storeFile = file("release.jks")
+            storePassword = "singr-node"
+            keyAlias = "singr"
+            keyPassword = "singr-node"
         }
     }
 
@@ -49,7 +42,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (keystoreProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

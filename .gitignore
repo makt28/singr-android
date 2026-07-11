@@ -11,5 +11,7 @@ app/src/main/jniLibs/**/libsingr.so
 *.keystore
 *.jks
 keystore.properties
+# ...except the shared release keystore we deliberately commit for stable signing
+!/app/release.jks
 # Local agent/dev notes
 CLAUDE.md

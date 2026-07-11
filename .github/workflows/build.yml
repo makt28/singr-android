@@ -67,7 +67,7 @@ jobs:
           # Pin Gradle: the runner's system gradle is 9.x, which AGP 8.7 rejects.
           gradle-version: "8.11.1"
 
-      - name: Build (unsigned)
+      - name: Build
         run: gradle --no-daemon assembleRelease
 
       - name: Upload APK artifact
@@ -88,6 +88,6 @@ jobs:
           gh release view "$reltag" >/dev/null 2>&1 || \
             gh release create "$reltag" \
               --title "SingR Node $reltag" \
-              --notes "Unsigned APK bundling SingR core $reltag. Enable 'unknown sources' to install."
+              --notes "APK bundling SingR core $reltag. Enable 'unknown sources' to install."
           gh release upload "$reltag" "$apk" --clobber
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$reltag"
