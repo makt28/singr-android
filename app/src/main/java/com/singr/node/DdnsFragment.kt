@@ -18,7 +18,6 @@ class DdnsFragment : Fragment(R.layout.fragment_ddns) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val token = view.findViewById<EditText>(R.id.etToken)
         val zone = view.findViewById<EditText>(R.id.etZone)
-        val record = view.findViewById<EditText>(R.id.etRecord)
         val name = view.findViewById<EditText>(R.id.etName)
         val enabled = view.findViewById<CompoundButton>(R.id.swDdns)
 
@@ -27,7 +26,6 @@ class DdnsFragment : Fragment(R.layout.fragment_ddns) {
             val o = JSONObject(f.readText())
             token.setText(o.optString("token"))
             zone.setText(o.optString("zoneId"))
-            record.setText(o.optString("recordId"))
             name.setText(o.optString("name"))
             enabled.isChecked = true
         }
@@ -41,16 +39,14 @@ class DdnsFragment : Fragment(R.layout.fragment_ddns) {
             }
             val t = token.text.toString().trim()
             val z = zone.text.toString().trim()
-            val r = record.text.toString().trim()
             val n = name.text.toString().trim()
-            if (t.isEmpty() || z.isEmpty() || r.isEmpty() || n.isEmpty()) {
-                toast("请填全 Token / Zone ID / Record ID / 域名"); return@setOnClickListener
+            if (t.isEmpty() || z.isEmpty() || n.isEmpty()) {
+                toast("请填全 Token / Zone ID / 域名"); return@setOnClickListener
             }
             val o = JSONObject()
                 .put("provider", "cloudflare")
                 .put("token", t)
                 .put("zoneId", z)
-                .put("recordId", r)
                 .put("name", n)
             f.writeText(o.toString(2))
             DdnsWorker.schedule(requireContext())

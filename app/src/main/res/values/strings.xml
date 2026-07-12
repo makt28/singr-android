@@ -49,7 +49,6 @@
     <string name="ddns_provider_cf">Provider：Cloudflare（目标为本机全局 IPv6，自动获取）</string>
     <string name="ddns_token">API Token</string>
     <string name="ddns_zone">Zone ID</string>
-    <string name="ddns_record">Record ID</string>
     <string name="ddns_name">域名</string>
-    <string name="hint_ddns">每 15 分钟把本机全局 IPv6 更新到该 AAAA 记录。关闭并保存会删除配置并停止更新。</string>
+    <string name="hint_ddns">每 15 分钟把本机全局 IPv6 更新到该 AAAA 记录。App 会按域名自动查找记录，记录不存在时自动创建。关闭并保存会删除配置并停止更新。</string>
 </resources>
