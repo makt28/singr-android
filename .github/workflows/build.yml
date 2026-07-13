@@ -22,7 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve SingR release tag
         id: ver
@@ -62,12 +62,12 @@ jobs:
           install -D "$CORE_ASSET" "app/libs/$CORE_ASSET"
           ls -lh "app/libs/$CORE_ASSET"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           # Pin Gradle: the runner's system gradle is 9.x, which AGP 8.7 rejects.
           gradle-version: "8.11.1"
@@ -76,7 +76,7 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: singr-node-apk-${{ steps.ver.outputs.tag }}
           path: app/build/outputs/apk/release/*.apk
